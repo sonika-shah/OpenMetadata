@@ -302,6 +302,14 @@ class MigrationUtilTest {
     assertEquals("tags", payload.get("fieldPath").asText());
   }
 
+  @Test
+  void migrateColumnTagSuggestionWithoutTagsLeafStillTargetsColumn() {
+    JsonNode payload =
+        migrateTagSuggestionAndCapturePayload(
+            "dead-beef-0000-0006", "<#E::table::sample.shop.orders::columns::customer_id>");
+    assertEquals("columns.customer_id.tags", payload.get("fieldPath").asText());
+  }
+
   private JsonNode migrateTagSuggestionAndCapturePayload(String suggestionId, String entityLink) {
     when(handle.createQuery("SELECT 1 FROM suggestions LIMIT 1").mapToMap().list())
         .thenReturn(List.of(Map.of("1", 1)));

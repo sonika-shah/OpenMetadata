@@ -552,13 +552,14 @@ public class MigrationUtil {
         ObjectNode payload = JsonUtils.getObjectNode();
         payload.put("suggestionType", mappedSuggestionType);
 
-        // Keep the field path the entityLink points at (e.g. columns.<col>.tags) so a tag
-        // suggestion lands on the suggested column, not the parent entity; fall back to
-        // entity-level tags only when the link carries no tags field.
-        String fieldPath = extractFieldPathFromEntityLink(entityLink);
-        if ("Tag".equals(mappedSuggestionType) && !fieldPath.endsWith(Entity.FIELD_TAGS)) {
-          fieldPath = Entity.FIELD_TAGS;
-        }
+        // A tag suggestion's field path must target the tags field. Decide entity- vs
+        // column-level from whether the entityLink resolves to a nested field, not from a
+        // string suffix, so a column link that omits the trailing tags segment (e.g.
+        // columns.<col>) still tags the column instead of the parent entity.
+        String fieldPath =
+            "Tag".equals(mappedSuggestionType)
+                ? tagFieldPathFromEntityLink(entityLink)
+                : extractFieldPathFromEntityLink(entityLink);
         payload.put("fieldPath", fieldPath);
 
         if ("Tag".equals(mappedSuggestionType)) {
@@ -1030,6 +1031,27 @@ public class MigrationUtil {
           e.getMessage());
     }
     return resolvedId;
+  }
+
+  /**
+   * Resolve the tags field path for a tag suggestion. A link that resolves to a nested field
+   * (arrayFieldName present, e.g. {@code columns::<col>}) yields {@code columns.<col>.tags} —
+   * appending the tags segment when the link omits it — so the tag lands on the suggested
+   * column. An entity-level link (no nested field) yields {@code tags}.
+   */
+  private static String tagFieldPathFromEntityLink(String entityLinkStr) {
+    String fieldPath = Entity.FIELD_TAGS;
+    try {
+      MessageParser.EntityLink entityLink = MessageParser.EntityLink.parse(entityLinkStr);
+      if (entityLink.getArrayFieldName() != null) {
+        String derived = extractFieldPathFromEntityLink(entityLinkStr);
+        fieldPath =
+            derived.endsWith("." + Entity.FIELD_TAGS) ? derived : derived + "." + Entity.FIELD_TAGS;
+      }
+    } catch (Exception e) {
+      LOG.debug("Could not parse entityLink '{}': {}", entityLinkStr, e.getMessage());
+    }
+    return fieldPath;
   }
 
   private static String extractFieldPathFromEntityLink(String entityLinkStr) {
